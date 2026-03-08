@@ -43,6 +43,120 @@
 - Clash Verge
 - 中文本地化
 
+## OpenClaw 运行建议
+
+这一节不是拍脑袋写的，主要基于 OpenClaw 当前官方文档里的安装与运行建议，再结合这次在 Debian GNOME 虚拟机里的实际落地经验整理出来。
+
+官方参考入口：
+
+- `https://github.com/openclaw/openclaw`
+- `https://docs.openclaw.ai/getting-started`
+- `https://docs.openclaw.ai/install`
+
+### 官方建议
+
+从 OpenClaw 官方安装文档和 Getting Started 文档来看，当前比较明确的建议有：
+
+- 运行时需要 `Node 22+`
+- 官方推荐的安装方式是安装脚本，或者直接 `npm install -g openclaw@latest`
+- Windows 上官方更推荐在 `WSL2` 下运行 OpenClaw
+- 如果你是从源码运行，还需要 `pnpm`
+- Docker 是可选项，不是本地最快路径的必需项
+- Linux 上默认使用 systemd user service，如果希望退出登录后服务继续运行，需要确认 `linger` 已开启
+- 配置和个性化内容不建议塞进仓库本身，而应放在 `~/.openclaw/` 和 `~/.openclaw/workspace`
+
+官方文档里的典型命令是：
+
+```bash
+# 安装
+curl -fsSL https://openclaw.ai/install.sh | bash
+
+# 或者已有 Node 22+ 时直接装
+npm install -g openclaw@latest
+
+# 首次引导
+openclaw onboard --install-daemon
+
+# 检查状态
+openclaw doctor
+openclaw status
+openclaw dashboard
+```
+
+如果你是从源码工作流进入，官方建议大致是：
+
+```bash
+git clone https://github.com/openclaw/openclaw.git
+cd openclaw
+pnpm install
+pnpm ui:build
+pnpm build
+pnpm link --global
+openclaw onboard --install-daemon
+```
+
+Linux 上如果发现服务在登出后停止，官方建议检查：
+
+```bash
+sudo loginctl enable-linger $USER
+```
+
+### 结合本项目的实践建议
+
+如果运行环境是这类“Debian GNOME on Hyper-V”的工作虚拟机，我更建议这样理解 OpenClaw 的运行条件：
+
+- `Node 22` 是硬条件，不要偷懒用 Debian 默认较旧版本
+- 磁盘不要太小，`20GB` 能跑，`50GB` 更舒服，尤其是还要放 Chrome、Clash、日志和 npm 全局包
+- 如果还要跑 GNOME、Chrome、XRDP、Clash Verge 和多套 CLI，内存不要按“纯 CLI 服务”去估算
+- OpenClaw 本体不算特别重，但“桌面环境 + 浏览器 + AI CLI + 长期日志”叠加后，资源压力会明显上来
+
+这次项目里，最后可用的一套配置是：
+
+- 8 vCPU
+- 4 GB 启动内存
+- 2-8 GB 动态内存
+- 50 GB 系统盘
+
+如果只是跑 OpenClaw 网关本体，要求可以比这低很多。  
+但如果目标是“一台日常可登录、可远程桌面、可跑浏览器和 AI 工具的 Debian 工作机”，那就不要按最小化 server 标准来配。
+
+### 推荐的 OpenClaw 使用方式
+
+如果你只是要把 OpenClaw 当作长期可用的本地网关，我推荐的顺序是：
+
+1. 先保证 Node 22 正常
+2. 用官方安装脚本或 npm 全局安装
+3. 跑 `openclaw onboard --install-daemon`
+4. 用 `openclaw doctor` 和 `openclaw status` 验证
+5. 再去做模型、频道和插件层的配置
+
+示例：
+
+```bash
+node --version
+npm --version
+
+npm install -g openclaw@latest
+openclaw onboard --install-daemon
+
+openclaw doctor
+openclaw status
+openclaw dashboard
+```
+
+### 什么时候该考虑 Docker / Podman
+
+官方文档也给了 Docker 和 Podman 路线，但更适合这些场景：
+
+- 你想把 Gateway 跑成容器化服务
+- 你更在意隔离性，而不是最快的本地调试闭环
+- 你在做服务器或长期托管环境
+
+如果你只是像这次一样，在 Hyper-V 里做一台自己长期使用的 Debian GNOME 工作虚拟机，优先推荐：
+
+- 直接安装 OpenClaw
+- 把复杂度留给虚拟机层，不要再额外叠一层容器
+
 ## Quick Start
 
 如果你第一次看这个仓库，先按这个顺序阅读：
