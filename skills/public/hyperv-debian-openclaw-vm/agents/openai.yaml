@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hyper-V Debian OpenClaw VM"
+  short_description: "Build and repair a Debian GNOME VM for OpenClaw on Hyper-V"
+  default_prompt: "Use $hyperv-debian-openclaw-vm to provision or repair a Debian GNOME VM with OpenClaw on Windows Hyper-V."
