@@ -334,25 +334,37 @@ local-hostname: debian-desktop
 
 ### 模板验证结果
 
-这套模板已经在 2026-03-09 做过一轮从零开始的完整重建验证，不是只停留在静态示例阶段。
+这套模板已经做过多轮从零开始的完整重建验证，但当前要把验收结果拆成两部分看，不能混成一句“全部通过”。
 
-那一轮验证实际完成了这些动作：
+已经确认通过的部分：
 
-- 重新生成系统盘
-- 重新渲染 `user-data` / `meta-data`
-- 重新打包 `cidata.iso`
-- 新建 Hyper-V 验证虚拟机并冷启动
-- 等待 `cloud-init` 完整执行
-- 检查 SSH、XRDP、GNOME、OpenClaw gateway 和真实模型调用
-
-最终结果是：
-
-- `cloud-init status --wait --long` = `done`
-- `ssh` / `xrdp` / `gdm3` / `openclaw-gateway.service` 全部 `active`
-- 端口 `22`、`3389`、`18789` 可达
+- `cloud-init status --wait --long` 可以做到 `done`
+- `ssh`、`xrdp`、`openclaw-gateway.service` 可以正常起来
 - `openclaw gateway status --json` 返回 `rpc.ok: true`
+- 宿主机侧的 OpenClaw Web UI 已验证可用
+- 实际通过宿主机浏览器发送消息，并收到回复
 
-完整过程和修正点见：
+当前仍然保留的限制：
+
+- `Hyper-V / vmconnect` 本地图形界面还没有稳定验收通过
+- 来宾机内部的 `gdm3`、`gnome-shell`、`Xorg` 和 framebuffer 可能都已经起来
+- 但宿主机 `vmconnect` 仍可能显示黑屏
+
+换句话说，目前这套仓库已经证明了：
+
+- Debian guest 本身的图形栈可以启动
+- OpenClaw 网关和 Web UI 可以工作
+
+但还没有证明：
+
+- 宿主机 `vmconnect` 一定能稳定显示来宾机图形界面
+
+因此，如果你后续要复用这套方案，需要把这条边界记住：
+
+- `OpenClaw / CLI / cloud-init` 路线已验证
+- `Hyper-V 本地图形控制台` 仍然是已知待解问题
+
+完整过程和已知问题见：
 
 - [docs/template-validation.md](docs/template-validation.md)
 
