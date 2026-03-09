@@ -1,0 +1,30 @@
+{
+  "task": "Preconfigure OpenClaw on the Hyper-V Debian GNOME guest with the provided Zhipu coding endpoint and DingTalk credentials, start the gateway daemon, and validate a working state.",
+  "features": [
+    {
+      "id": "guest-access",
+      "title": "Recover a stable management path into the Debian guest",
+      "status": "completed"
+    },
+    {
+      "id": "official-docs",
+      "title": "Confirm OpenClaw's current official guidance for install, onboarding, daemon lifecycle, provider configuration, and DingTalk integration",
+      "status": "completed"
+    },
+    {
+      "id": "runtime-config",
+      "title": "Apply the Zhipu and DingTalk configuration inside the guest without persisting secrets in the repo",
+      "status": "in_progress"
+    },
+    {
+      "id": "daemon-health",
+      "title": "Start the OpenClaw gateway daemon and reach a healthy running status",
+      "status": "completed"
+    },
+    {
+      "id": "hyperv-debug",
+      "title": "Validate and debug the configured OpenClaw guest from the Hyper-V side",
+      "status": "completed"
+    }
+  ]
+}

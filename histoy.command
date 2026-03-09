@@ -193,7 +193,7 @@ Start-VM -Name "Debian-Desktop"
 python "C:\workspace\hyperv-debian-openclaw-skill\skills-local\codex\.system\skill-creator\scripts\init_skill.py" hyperv-debian-openclaw-vm --path "C:\workspace\hyperv-debian-openclaw-skill\skills\public" --resources scripts,references --interface display_name="Hyper-V Debian OpenClaw VM" --interface short_description="Build and repair a Debian GNOME VM for OpenClaw on Hyper-V" --interface default_prompt="Use $hyperv-debian-openclaw-vm to provision or repair a Debian GNOME VM with OpenClaw on Windows Hyper-V."
 python "C:\workspace\hyperv-debian-openclaw-skill\skills-local\codex\.system\skill-creator\scripts\quick_validate.py" "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm"
 powershell -ExecutionPolicy Bypass -File "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm\scripts\check_hyperv_prereqs.ps1"
-powershell -ExecutionPolicy Bypass -File "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm\scripts\collect_vm_report.ps1" -VmName "Debian-Desktop" -GuestIp "172.18.1.240"
+powershell -ExecutionPolicy Bypass -File "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm\scripts\collect_vm_report.ps1" -VmName "Debian-Desktop" -GuestIp "<guest-ip>"
 
 # 20. Publish the example repo
 git init -b main
@@ -211,3 +211,22 @@ gh release create v0.1.0 --repo Bahtya/hyperv-debian-openclaw-skill --title "v0.
 # 21. Install the skill locally
 robocopy "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm" "C:\workspace\hyperv-debian-openclaw-skill\skills-local\codex\hyperv-debian-openclaw-vm" /E
 robocopy "C:\workspace\hyperv-debian-openclaw-skill\skills\public\hyperv-debian-openclaw-vm" "C:\workspace\hyperv-debian-openclaw-skill\skills-local\agents\hyperv-debian-openclaw-vm" /E
+
+# 22. Validate the publishable cloud-init template on a fresh Hyper-V VM
+git checkout explore/openclaw-zhipu-dingtalk-gateway
+git diff -- templates/cloud-init/user-data.yaml
+oscdimg -j1 -lcidata -m -o "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\seed-files" "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\cidata.iso"
+qemu-img convert -p -f qcow2 -O vhdx -o subformat=dynamic "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\validation-genericcloud.qcow2" "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\Debian-Template-Validation.vhdx"
+Resize-VHD -Path "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\Debian-Template-Validation.vhdx" -SizeBytes 50GB
+New-VM -Name "Debian-Template-Validation" -Generation 2 -MemoryStartupBytes 4GB -VHDPath "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\Debian-Template-Validation.vhdx" -Path "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation" -SwitchName "Default Switch"
+Set-VMProcessor -VMName "Debian-Template-Validation" -Count 4
+Set-VMMemory -VMName "Debian-Template-Validation" -DynamicMemoryEnabled $true -MinimumBytes 2GB -StartupBytes 4GB -MaximumBytes 8GB
+Set-VMFirmware -VMName "Debian-Template-Validation" -EnableSecureBoot On -SecureBootTemplate MicrosoftUEFICertificateAuthority
+Add-VMDvdDrive -VMName "Debian-Template-Validation" -Path "C:\workspace\hyperv-debian-openclaw-skill\HyperV\Debian-Template-Validation\cidata.iso"
+Start-VM -Name "Debian-Template-Validation"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "sudo cloud-init status --wait --long"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "sudo systemctl is-active ssh xrdp gdm3"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "systemctl --user is-active openclaw-gateway.service"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "export PATH=\"$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH\"; openclaw gateway status --json"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "export PATH=\"$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH\"; node -v; npm -v; openclaw --version; google-chrome --version | head -n 1"
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" claude@<validation-vm-ip> "export PATH=\"$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH\"; openclaw agent --agent main --session-id template-validation -m TEMPLATE_OK --json"

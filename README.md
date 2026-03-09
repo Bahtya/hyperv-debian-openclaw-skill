@@ -317,6 +317,127 @@ local-hostname: debian-desktop
 
 这就是 cloud image + cloud-init 方案最小可运行的核心。
 
+## 可发布模板版 cloud-init
+
+如果你不是只想做一台自己的实验机，而是想发布一个别人也能直接复用的模板，那么推荐做法不是把真实密钥写进 cloud-init，而是：
+
+- 模板负责安装系统和软件
+- 模板负责写入 OpenClaw 配置骨架
+- 模板负责安装并启用 daemon
+- 模板只保留环境变量占位符
+- 实际使用者自己补密钥
+
+这个仓库已经提供了一套可发布模板版示例：
+
+- [templates/cloud-init/user-data.yaml](templates/cloud-init/user-data.yaml)
+- [templates/cloud-init/meta-data.yaml](templates/cloud-init/meta-data.yaml)
+
+### 模板验证结果
+
+这套模板已经做过多轮从零开始的完整重建验证，但当前要把验收结果拆成两部分看，不能混成一句“全部通过”。
+
+已经确认通过的部分：
+
+- `cloud-init status --wait --long` 可以做到 `done`
+- `ssh`、`xrdp`、`openclaw-gateway.service` 可以正常起来
+- `openclaw gateway status --json` 返回 `rpc.ok: true`
+- 宿主机侧的 OpenClaw Web UI 已验证可用
+- 实际通过宿主机浏览器发送消息，并收到回复
+
+当前仍然保留的限制：
+
+- `Hyper-V / vmconnect` 本地图形界面还没有稳定验收通过
+- 来宾机内部的 `gdm3`、`gnome-shell`、`Xorg` 和 framebuffer 可能都已经起来
+- 但宿主机 `vmconnect` 仍可能显示黑屏
+
+换句话说，目前这套仓库已经证明了：
+
+- Debian guest 本身的图形栈可以启动
+- OpenClaw 网关和 Web UI 可以工作
+
+但还没有证明：
+
+- 宿主机 `vmconnect` 一定能稳定显示来宾机图形界面
+
+因此，如果你后续要复用这套方案，需要把这条边界记住：
+
+- `OpenClaw / CLI / cloud-init` 路线已验证
+- `Hyper-V 本地图形控制台` 仍然是已知待解问题
+
+完整过程和已知问题见：
+
+- [docs/template-validation.md](docs/template-validation.md)
+
+这两个文件的设计目标是：
+
+- 可以直接作为 Hyper-V / QEMU / 通用 NoCloud 模板的起点
+- 默认预装 OpenClaw、Node 22、GNOME、SSH、XRDP、Chrome
+- 默认把网关 bind 到 `lan`
+- 默认把控制台端口设成 `18789`
+- 默认把模型提供商结构准备成 Zhipu Coding CN 端点
+- 但不包含任何真实 API key 或 client secret
+
+### 模板里已经做好的事情
+
+这套模板会自动完成：
+
+- 创建 `claude` 用户
+- 安装 OpenClaw 所需基础环境
+- 安装 Node 22
+- 全局安装：
+  - `openclaw`
+  - `@openai/codex`
+  - `@google/gemini-cli`
+  - `@anthropic-ai/claude-code`
+- 写入 `~/.openclaw/openclaw.json`
+- 写入 `~/.config/openclaw/env`
+- 安装并启用 OpenClaw gateway daemon
+- 启用 `gdm3`、`ssh`、`xrdp`
+
+### 模板使用者必须自己补的内容
+
+发布模板时不要直接内嵌真实凭据。  
+模板使用者至少需要自己填写：
+
+- `ZAI_API_KEY`
+- `OPENCLAW_GATEWAY_TOKEN`
+
+如果后续要接入飞书，再补：
+
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_VERIFICATION_TOKEN`
+- `FEISHU_ENCRYPT_KEY`
+
+这些占位项已经写在：
+
+- `~/.config/openclaw/env`
+
+### 推荐使用方式
+
+1. 用模板生成来宾机
+2. 首次登录后补环境变量
+3. 重启 OpenClaw daemon
+4. 从宿主机访问 Web UI
+
+例如在来宾机里：
+
+```bash
+nano ~/.config/openclaw/env
+systemctl --user restart openclaw-gateway.service
+openclaw gateway status
+openclaw dashboard --no-open
+```
+
+### 为什么这更适合发布
+
+因为这样做可以同时满足两件事：
+
+- 开箱即用程度足够高
+- 模板本身不携带真实 secret
+
+如果你要把模板公开放到仓库、镜像库或者分享给别人，这个边界非常重要。
+
 ## 为什么不是直接用 Debian GNOME 安装 ISO
 
 这个项目不是没尝试过 Debian GNOME Live ISO，而是试过之后放弃了。
@@ -393,6 +514,8 @@ systemctl start gdm3
   完整构建与排障手册
 - [docs/final-validation.md](docs/final-validation.md)
   最终验收记录
+- [docs/template-validation.md](docs/template-validation.md)
+  可发布模板版 `cloud-init` 的完整重建验证记录
 - `histoy.command`
   这次构建过程的归一化命令历史
 - [skills/public/hyperv-debian-openclaw-vm/SKILL.md](skills/public/hyperv-debian-openclaw-vm/SKILL.md)

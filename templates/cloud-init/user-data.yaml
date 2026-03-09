@@ -1,0 +1,201 @@
+#cloud-config
+hostname: debian-desktop
+manage_etc_hosts: true
+timezone: Asia/Shanghai
+package_update: true
+package_upgrade: false
+package_reboot_if_required: false
+ssh_pwauth: true
+disable_root: true
+
+users:
+  - default
+  - name: claude
+    gecos: Claude
+    shell: /bin/bash
+    groups: [adm, audio, cdrom, dip, plugdev, render, sudo, video]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    plain_text_passwd: CHANGE_ME
+
+bootcmd:
+  - |
+      cat >/etc/apt/sources.list.d/localmirror.sources <<'EOF'
+      Types: deb
+      URIs: http://mirrors.ustc.edu.cn/debian/
+      Suites: trixie trixie-updates
+      Components: main contrib non-free non-free-firmware
+      Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+      Types: deb
+      URIs: http://mirrors.ustc.edu.cn/debian-security/
+      Suites: trixie-security
+      Components: main contrib non-free non-free-firmware
+      Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+      EOF
+
+write_files:
+  - path: /root/provision-openclaw-template.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+
+      retry() {
+        local attempts="$1"
+        shift
+        local delay=5
+        local n=1
+        until "$@"; do
+          if [ "$n" -ge "$attempts" ]; then
+            return 1
+          fi
+          sleep "$delay"
+          n=$((n + 1))
+          delay=$((delay * 2))
+        done
+      }
+
+      su - claude -c 'mkdir -p ~/.openclaw ~/.config/openclaw ~/.openclaw/workspace ~/.npm-global'
+      cat >/home/claude/.config/openclaw/env <<'EOF'
+      export ZAI_API_KEY=""
+      export OPENCLAW_GATEWAY_TOKEN=""
+      export FEISHU_APP_ID=""
+      export FEISHU_APP_SECRET=""
+      export FEISHU_VERIFICATION_TOKEN=""
+      export FEISHU_ENCRYPT_KEY=""
+      EOF
+
+      cat >/home/claude/.openclaw/openclaw.json <<'EOF'
+      {
+        gateway: {
+          mode: "local",
+          bind: "lan",
+          port: 18789,
+          auth: {
+            mode: "token",
+            token: "${OPENCLAW_GATEWAY_TOKEN}"
+          },
+          controlUi: {
+            allowedOrigins: [
+              "http://localhost:18789",
+              "http://127.0.0.1:18789"
+            ]
+          }
+        },
+        models: {
+          mode: "merge",
+          providers: {
+            zai: {
+              baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+              apiKey: "${ZAI_API_KEY}",
+              api: "openai-completions",
+              models: [
+                {
+                  id: "glm-5",
+                  name: "GLM-5",
+                  reasoning: true,
+                  input: ["text"],
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  contextWindow: 204800,
+                  maxTokens: 131072
+                }
+              ]
+            }
+          }
+        },
+        agents: {
+          defaults: {
+            model: {
+              primary: "zai/glm-5"
+            },
+            models: {
+              "zai/glm-5": {
+                alias: "GLM"
+              }
+            },
+            workspace: "/home/claude/.openclaw/workspace"
+          }
+        }
+      }
+      EOF
+
+      chown -R claude:claude /home/claude/.openclaw /home/claude/.config/openclaw
+      grep -qxF 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' /home/claude/.profile || \
+        echo 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' >> /home/claude/.profile
+      grep -qxF 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' /home/claude/.bashrc || \
+        echo 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' >> /home/claude/.bashrc
+
+      retry 5 apt-get update
+      retry 5 apt-get install -y \
+        openssh-server \
+        xrdp \
+        gdm3 \
+        gnome-shell \
+        gnome-session \
+        curl \
+        wget \
+        git \
+        gnupg \
+        python3 \
+        python3-pip \
+        python3-venv \
+        jq \
+        unzip \
+        ca-certificates \
+        dbus-x11 \
+        xauth \
+        ibus-libpinyin \
+        network-manager
+
+      printf 'gdm3 shared/default-x-display-manager select gdm3\n' | debconf-set-selections
+      install -d -m 0755 /etc/X11
+      printf '/usr/sbin/gdm3\n' >/etc/X11/default-display-manager
+      ln -sf /usr/lib/systemd/system/gdm.service /etc/systemd/system/display-manager.service
+
+      install -d -m 0755 /usr/share/keyrings
+      retry 5 bash -lc 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'
+      cat >/etc/apt/sources.list.d/google-chrome.sources <<'EOF'
+      Types: deb
+      URIs: https://dl.google.com/linux/chrome/deb/
+      Suites: stable
+      Components: main
+      Signed-By: /usr/share/keyrings/google-chrome.gpg
+      EOF
+
+      retry 5 apt-get update
+      retry 5 apt-get install -y google-chrome-stable
+
+      usermod -aG netdev claude || true
+
+      cd /tmp
+      retry 5 curl -fsSLO https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt
+      NODE_TAR="$(awk '/linux-x64.tar.xz$/ {print $2; exit}' SHASUMS256.txt)"
+      retry 5 curl -fsSLO "https://nodejs.org/dist/latest-v22.x/${NODE_TAR}"
+      grep " ${NODE_TAR}$" SHASUMS256.txt | sha256sum -c -
+      tar -C /usr/local --strip-components=1 -xJf "${NODE_TAR}"
+      rm -f SHASUMS256.txt "${NODE_TAR}"
+
+      su - claude -c 'npm config set prefix "$HOME/.npm-global"'
+      su - claude -c 'npm config set fetch-retries 5'
+      su - claude -c 'npm config set fetch-retry-mintimeout 20000'
+      su - claude -c 'npm config set fetch-retry-maxtimeout 120000'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g openclaw'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g @google/gemini-cli @anthropic-ai/claude-code'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g --force --include=optional @openai/codex@latest'
+
+      loginctl enable-linger claude || true
+      su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; openclaw gateway install || true'
+      su - claude -c 'systemctl --user enable openclaw-gateway.service'
+      su - claude -c 'systemctl --user restart openclaw-gateway.service'
+
+      systemctl enable --now ssh xrdp gdm3
+      systemctl set-default graphical.target
+      touch /var/lib/provision-openclaw-template.done
+
+runcmd:
+  - [bash, /root/provision-openclaw-template.sh]
+
+final_message: OpenClaw publishable template bootstrap finished.
