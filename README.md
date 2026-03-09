@@ -332,6 +332,30 @@ local-hostname: debian-desktop
 - [templates/cloud-init/user-data.yaml](templates/cloud-init/user-data.yaml)
 - [templates/cloud-init/meta-data.yaml](templates/cloud-init/meta-data.yaml)
 
+### 模板验证结果
+
+这套模板已经在 2026-03-09 做过一轮从零开始的完整重建验证，不是只停留在静态示例阶段。
+
+那一轮验证实际完成了这些动作：
+
+- 重新生成系统盘
+- 重新渲染 `user-data` / `meta-data`
+- 重新打包 `cidata.iso`
+- 新建 Hyper-V 验证虚拟机并冷启动
+- 等待 `cloud-init` 完整执行
+- 检查 SSH、XRDP、GNOME、OpenClaw gateway 和真实模型调用
+
+最终结果是：
+
+- `cloud-init status --wait --long` = `done`
+- `ssh` / `xrdp` / `gdm3` / `openclaw-gateway.service` 全部 `active`
+- 端口 `22`、`3389`、`18789` 可达
+- `openclaw gateway status --json` 返回 `rpc.ok: true`
+
+完整过程和修正点见：
+
+- [docs/template-validation.md](docs/template-validation.md)
+
 这两个文件的设计目标是：
 
 - 可以直接作为 Hyper-V / QEMU / 通用 NoCloud 模板的起点
@@ -478,6 +502,8 @@ systemctl start gdm3
   完整构建与排障手册
 - [docs/final-validation.md](docs/final-validation.md)
   最终验收记录
+- [docs/template-validation.md](docs/template-validation.md)
+  可发布模板版 `cloud-init` 的完整重建验证记录
 - `histoy.command`
   这次构建过程的归一化命令历史
 - [skills/public/hyperv-debian-openclaw-vm/SKILL.md](skills/public/hyperv-debian-openclaw-vm/SKILL.md)

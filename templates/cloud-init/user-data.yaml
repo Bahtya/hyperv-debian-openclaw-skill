@@ -16,11 +16,7 @@ users:
     groups: [adm, audio, cdrom, dip, plugdev, render, sudo, video]
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false
-
-chpasswd:
-  expire: false
-  list:
-    - claude:CHANGE_ME
+    plain_text_passwd: CHANGE_ME
 
 bootcmd:
   - |
@@ -46,6 +42,21 @@ write_files:
       #!/bin/bash
       set -euxo pipefail
       export DEBIAN_FRONTEND=noninteractive
+
+      retry() {
+        local attempts="$1"
+        shift
+        local delay=5
+        local n=1
+        until "$@"; do
+          if [ "$n" -ge "$attempts" ]; then
+            return 1
+          fi
+          sleep "$delay"
+          n=$((n + 1))
+          delay=$((delay * 2))
+        done
+      }
 
       su - claude -c 'mkdir -p ~/.openclaw ~/.config/openclaw ~/.openclaw/workspace ~/.npm-global'
       cat >/home/claude/.config/openclaw/env <<'EOF'
@@ -117,8 +128,8 @@ write_files:
       grep -qxF 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' /home/claude/.bashrc || \
         echo 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' >> /home/claude/.bashrc
 
-      apt-get update
-      apt-get install -y \
+      retry 5 apt-get update
+      retry 5 apt-get install -y \
         openssh-server \
         xrdp \
         gdm3 \
@@ -145,7 +156,7 @@ write_files:
       ln -sf /usr/lib/systemd/system/gdm.service /etc/systemd/system/display-manager.service
 
       install -d -m 0755 /usr/share/keyrings
-      curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+      retry 5 bash -lc 'curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg'
       cat >/etc/apt/sources.list.d/google-chrome.sources <<'EOF'
       Types: deb
       URIs: https://dl.google.com/linux/chrome/deb/
@@ -154,29 +165,33 @@ write_files:
       Signed-By: /usr/share/keyrings/google-chrome.gpg
       EOF
 
-      apt-get update
-      apt-get install -y google-chrome-stable
+      retry 5 apt-get update
+      retry 5 apt-get install -y google-chrome-stable
 
       usermod -aG netdev claude || true
 
       cd /tmp
-      curl -fsSLO https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt
+      retry 5 curl -fsSLO https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt
       NODE_TAR="$(awk '/linux-x64.tar.xz$/ {print $2; exit}' SHASUMS256.txt)"
-      curl -fsSLO "https://nodejs.org/dist/latest-v22.x/${NODE_TAR}"
+      retry 5 curl -fsSLO "https://nodejs.org/dist/latest-v22.x/${NODE_TAR}"
       grep " ${NODE_TAR}$" SHASUMS256.txt | sha256sum -c -
       tar -C /usr/local --strip-components=1 -xJf "${NODE_TAR}"
       rm -f SHASUMS256.txt "${NODE_TAR}"
 
       su - claude -c 'npm config set prefix "$HOME/.npm-global"'
-      su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g @openai/codex @google/gemini-cli @anthropic-ai/claude-code openclaw'
-      su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g --force --include=optional @openai/codex@latest'
+      su - claude -c 'npm config set fetch-retries 5'
+      su - claude -c 'npm config set fetch-retry-mintimeout 20000'
+      su - claude -c 'npm config set fetch-retry-maxtimeout 120000'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g openclaw'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g @google/gemini-cli @anthropic-ai/claude-code'
+      retry 5 su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; npm install -g --force --include=optional @openai/codex@latest'
 
       loginctl enable-linger claude || true
       su - claude -c 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"; openclaw gateway install || true'
       su - claude -c 'systemctl --user enable openclaw-gateway.service'
       su - claude -c 'systemctl --user restart openclaw-gateway.service'
 
-      systemctl enable ssh xrdp gdm3
+      systemctl enable --now ssh xrdp gdm3
       systemctl set-default graphical.target
       touch /var/lib/provision-openclaw-template.done
 
