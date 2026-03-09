@@ -13,7 +13,7 @@ users:
   - name: claude
     gecos: Claude
     shell: /bin/bash
-    groups: [adm, audio, cdrom, dip, netdev, plugdev, render, sudo, video]
+    groups: [adm, audio, cdrom, dip, plugdev, render, sudo, video]
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false
 
@@ -38,42 +38,26 @@ bootcmd:
       Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
       EOF
 
-packages:
-  - openssh-server
-  - xrdp
-  - gdm3
-  - gnome-shell
-  - gnome-session
-  - google-chrome-stable
-  - curl
-  - wget
-  - git
-  - python3
-  - python3-pip
-  - python3-venv
-  - jq
-  - unzip
-  - ca-certificates
-  - dbus-x11
-  - xauth
-  - ibus-libpinyin
-
 write_files:
-  - path: /home/claude/.config/openclaw/env
-    owner: claude:claude
-    permissions: "0600"
+  - path: /root/provision-openclaw-template.sh
+    owner: root:root
+    permissions: "0755"
     content: |
+      #!/bin/bash
+      set -euxo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+
+      su - claude -c 'mkdir -p ~/.openclaw ~/.config/openclaw ~/.openclaw/workspace ~/.npm-global'
+      cat >/home/claude/.config/openclaw/env <<'EOF'
       export ZAI_API_KEY=""
       export OPENCLAW_GATEWAY_TOKEN=""
       export FEISHU_APP_ID=""
       export FEISHU_APP_SECRET=""
       export FEISHU_VERIFICATION_TOKEN=""
       export FEISHU_ENCRYPT_KEY=""
+      EOF
 
-  - path: /home/claude/.openclaw/openclaw.json
-    owner: claude:claude
-    permissions: "0600"
-    content: |
+      cat >/home/claude/.openclaw/openclaw.json <<'EOF'
       {
         gateway: {
           mode: "local",
@@ -125,24 +109,55 @@ write_files:
           }
         }
       }
+      EOF
 
-  - path: /root/provision-openclaw-template.sh
-    owner: root:root
-    permissions: "0755"
-    content: |
-      #!/bin/bash
-      set -euxo pipefail
-      export DEBIAN_FRONTEND=noninteractive
-
-      su - claude -c 'mkdir -p ~/.openclaw ~/.config/openclaw ~/.openclaw/workspace ~/.npm-global'
+      chown -R claude:claude /home/claude/.openclaw /home/claude/.config/openclaw
       grep -qxF 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' /home/claude/.profile || \
         echo 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' >> /home/claude/.profile
       grep -qxF 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' /home/claude/.bashrc || \
         echo 'export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin:$PATH"' >> /home/claude/.bashrc
 
+      apt-get update
+      apt-get install -y \
+        openssh-server \
+        xrdp \
+        gdm3 \
+        gnome-shell \
+        gnome-session \
+        curl \
+        wget \
+        git \
+        gnupg \
+        python3 \
+        python3-pip \
+        python3-venv \
+        jq \
+        unzip \
+        ca-certificates \
+        dbus-x11 \
+        xauth \
+        ibus-libpinyin \
+        network-manager
+
       printf 'gdm3 shared/default-x-display-manager select gdm3\n' | debconf-set-selections
+      install -d -m 0755 /etc/X11
       printf '/usr/sbin/gdm3\n' >/etc/X11/default-display-manager
       ln -sf /usr/lib/systemd/system/gdm.service /etc/systemd/system/display-manager.service
+
+      install -d -m 0755 /usr/share/keyrings
+      curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+      cat >/etc/apt/sources.list.d/google-chrome.sources <<'EOF'
+      Types: deb
+      URIs: https://dl.google.com/linux/chrome/deb/
+      Suites: stable
+      Components: main
+      Signed-By: /usr/share/keyrings/google-chrome.gpg
+      EOF
+
+      apt-get update
+      apt-get install -y google-chrome-stable
+
+      usermod -aG netdev claude || true
 
       cd /tmp
       curl -fsSLO https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt

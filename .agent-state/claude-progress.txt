@@ -1,0 +1,21 @@
+Current task:
+Configure OpenClaw inside the Hyper-V Debian GNOME guest to use the provided Zhipu coding API endpoint and DingTalk channel credentials, then bring the gateway daemon to a working state.
+
+Current status:
+- Working branch: explore/openclaw-zhipu-dingtalk-gateway
+- Task state has been refreshed for this run
+- Secrets are user-provided and must only be applied inside the guest runtime/config, never committed to the repository
+- QEMU + SSH recovery path is stable and was used successfully
+- OpenClaw onboarding completed successfully with the provided Zhipu coding CN endpoint
+- `openclaw gateway status --json` shows the daemon running with RPC `ok: true`
+- A real agent turn succeeded and returned `OPENCLAW_OK`
+- Current official OpenClaw build exposes Feishu/Lark as a channel plugin, but does not expose DingTalk as an official channel plugin or `channels add` target
+- SSH stability issue on the Hyper-V guest was fixed by adjusting sshd stability settings and disabling `PerSourcePenalties`
+- Current Hyper-V guest IP: 172.18.7.226
+- Hyper-V-side validation now succeeds for SSH (`22`), XRDP (`3389`), and OpenClaw dashboard HTTP (`18789`)
+- Dashboard is now host-accessible at `http://172.18.7.226:18789/` with the current gateway token fragment
+
+Next steps:
+1. Decide whether DingTalk should be documented as unsupported in the current official OpenClaw build, or whether an unsupported custom adapter path should be attempted
+2. If needed, document the exact Zhipu config shape and the DingTalk support gap in the repo branch
+3. If desired, switch the gateway bind/auth/dashboard setup from ad hoc testing into a documented and durable repo recipe
