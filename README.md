@@ -429,6 +429,24 @@ openclaw gateway status
 openclaw dashboard --no-open
 ```
 
+如果你是在 Windows 宿主机上访问这台虚拟机里的 OpenClaw Web UI，当前更稳的方式不是直接打开来宾机 IP，而是先建一条 SSH 本地隧道：
+
+```powershell
+ssh -N -L 18789:127.0.0.1:18789 claude@<guest-ip>
+```
+
+然后在宿主机浏览器里打开：
+
+```text
+http://127.0.0.1:18789/
+```
+
+这样做的原因是：
+
+- OpenClaw Control UI 对浏览器上下文有额外限制
+- 直接访问 `http://<guest-ip>:18789/` 有时会被 `allowedOrigins` 或 secure-context 相关检查拦住
+- 走 `localhost` 隧道通常更稳定，也更接近这次实际验收时的访问方式
+
 ### 为什么这更适合发布
 
 因为这样做可以同时满足两件事：
