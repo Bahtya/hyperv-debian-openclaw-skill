@@ -577,3 +577,26 @@ systemctl start gdm3
 - `C:\workspace\hyperv-debian-openclaw-skill\source\histoy.command`
 
 它不是原始终端逐字转储，而是便于复盘的标准化命令历史。
+
+## 2026-03-10 Regression Update
+
+After a full clean rebuild of `Debian-Template-Validation`, the latest template was regression-tested again from scratch.
+
+What was re-verified:
+
+- `cloud-init status --wait --long` finished with `done`
+- `gdm3`, `ssh`, and `xrdp` were active after first boot
+- the Hyper-V `vmconnect` window returned to a visible Debian login screen
+- the VM was rebooted once more and the login screen still returned
+- host-side OpenClaw access still worked through the SSH local-tunnel pattern
+- an actual Web UI message was sent from the host and received the reply `好`
+
+What changed in the template for this regression:
+
+- install `xserver-xorg-video-fbdev`
+- add a `gdm` dconf profile for idle/power settings
+- add a `gdm` post-start recovery hook that runs `xset s off -dpms s noblank` and `xset dpms force on`
+
+Current practical conclusion:
+
+- the latest template has now passed a clean rebuild + reboot regression for both the Hyper-V local login screen and the host-side OpenClaw Web UI path

@@ -129,3 +129,45 @@
 - `ZAI_API_KEY`
 - `OPENCLAW_GATEWAY_TOKEN`
 - 如需飞书，再补 Feishu 凭据
+
+## 2026-03-10 回归更新
+
+在 2026-03-10，又额外做了一轮“完全从零开始”的回归，而不是沿用前一次已经修好的虚拟机状态。
+
+这轮回归实际做了：
+
+1. 清理已有验证 VM 和生成工件
+2. 重新下载 Debian 官方 `genericcloud` 基础镜像
+3. 用更新后的 `cloud-init` 模板重新渲染 `user-data` / `meta-data`
+4. 重新打包 `cidata.iso`
+5. 重新生成 VHDX 并创建新的 `Debian-Template-Validation`
+6. 等待 `cloud-init` 全量完成
+7. 检查 Hyper-V 本地图形登录界面
+8. 再重启一次虚拟机做回归
+9. 在宿主机重新验证 OpenClaw Web UI
+
+这轮新增验证通过的点：
+
+- `cloud-init` 仍然是 `done`
+- `gdm3`、`ssh`、`xrdp` 在首启后正常
+- `vmconnect` 中能重新看到 Debian 登录界面
+- 再次重启后，登录界面仍然能够回来
+- OpenClaw gateway 仍然正常
+- 宿主机通过 SSH 本地隧道访问 Web UI 仍然可用
+- 实际发送消息 `请只回复 好`，返回 `好`
+
+这轮回归中写回模板的修复主要是：
+
+- 安装 `xserver-xorg-video-fbdev`
+- 为 `gdm` 增加空闲/电源策略配置
+- 为 `gdm.service` 增加启动后恢复脚本
+
+这部分恢复脚本会在 `gdm` 每次启动后执行：
+
+- `xset s off -dpms s noblank`
+- `xset dpms force on`
+
+截至这轮回归，模板的结论可以更新为：
+
+- Hyper-V 本地图形登录界面：已通过全新重建 + 重启回归
+- OpenClaw Web UI：已通过宿主机实际交互回归
