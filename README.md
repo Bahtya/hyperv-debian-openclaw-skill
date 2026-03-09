@@ -317,6 +317,91 @@ local-hostname: debian-desktop
 
 这就是 cloud image + cloud-init 方案最小可运行的核心。
 
+## 可发布模板版 cloud-init
+
+如果你不是只想做一台自己的实验机，而是想发布一个别人也能直接复用的模板，那么推荐做法不是把真实密钥写进 cloud-init，而是：
+
+- 模板负责安装系统和软件
+- 模板负责写入 OpenClaw 配置骨架
+- 模板负责安装并启用 daemon
+- 模板只保留环境变量占位符
+- 实际使用者自己补密钥
+
+这个仓库已经提供了一套可发布模板版示例：
+
+- [templates/cloud-init/user-data.yaml](templates/cloud-init/user-data.yaml)
+- [templates/cloud-init/meta-data.yaml](templates/cloud-init/meta-data.yaml)
+
+这两个文件的设计目标是：
+
+- 可以直接作为 Hyper-V / QEMU / 通用 NoCloud 模板的起点
+- 默认预装 OpenClaw、Node 22、GNOME、SSH、XRDP、Chrome
+- 默认把网关 bind 到 `lan`
+- 默认把控制台端口设成 `18789`
+- 默认把模型提供商结构准备成 Zhipu Coding CN 端点
+- 但不包含任何真实 API key 或 client secret
+
+### 模板里已经做好的事情
+
+这套模板会自动完成：
+
+- 创建 `claude` 用户
+- 安装 OpenClaw 所需基础环境
+- 安装 Node 22
+- 全局安装：
+  - `openclaw`
+  - `@openai/codex`
+  - `@google/gemini-cli`
+  - `@anthropic-ai/claude-code`
+- 写入 `~/.openclaw/openclaw.json`
+- 写入 `~/.config/openclaw/env`
+- 安装并启用 OpenClaw gateway daemon
+- 启用 `gdm3`、`ssh`、`xrdp`
+
+### 模板使用者必须自己补的内容
+
+发布模板时不要直接内嵌真实凭据。  
+模板使用者至少需要自己填写：
+
+- `ZAI_API_KEY`
+- `OPENCLAW_GATEWAY_TOKEN`
+
+如果后续要接入飞书，再补：
+
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_VERIFICATION_TOKEN`
+- `FEISHU_ENCRYPT_KEY`
+
+这些占位项已经写在：
+
+- `~/.config/openclaw/env`
+
+### 推荐使用方式
+
+1. 用模板生成来宾机
+2. 首次登录后补环境变量
+3. 重启 OpenClaw daemon
+4. 从宿主机访问 Web UI
+
+例如在来宾机里：
+
+```bash
+nano ~/.config/openclaw/env
+systemctl --user restart openclaw-gateway.service
+openclaw gateway status
+openclaw dashboard --no-open
+```
+
+### 为什么这更适合发布
+
+因为这样做可以同时满足两件事：
+
+- 开箱即用程度足够高
+- 模板本身不携带真实 secret
+
+如果你要把模板公开放到仓库、镜像库或者分享给别人，这个边界非常重要。
+
 ## 为什么不是直接用 Debian GNOME 安装 ISO
 
 这个项目不是没尝试过 Debian GNOME Live ISO，而是试过之后放弃了。
